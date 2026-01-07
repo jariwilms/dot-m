@@ -3,6 +3,15 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/main/VisualStudio.gitignore
 
+# User Directories
+# [Ss]andbox/
+
+# Visual Studio project files
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+
 # User-specific files
 *.rsuser
 *.suo
@@ -18,6 +27,7 @@
 mono_crash.*
 
 # Build results
+[Bb]uild/
 [Dd]ebug/
 [Dd]ebugPublic/
 [Rr]elease/
@@ -309,9 +319,6 @@ node_modules/
 
 # Visual Studio 6 auto-generated workspace file (contains which files were open etc.)
 *.vbw
-
-# Visual Studio 6 auto-generated project file (contains which files were open etc.)
-*.vbp
 
 # Visual Studio 6 workspace and project file (working project files containing files to include in project)
 *.dsw
