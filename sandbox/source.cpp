@@ -33,18 +33,12 @@ void write(const std::filesystem::path& path, std::span<const dotm::byte_t> memo
 //    }
 //}
 
-void log_register_state(const dotm::sm83& sm83, const std::string& log_file = "debug.log")
+auto log_register_state(const dotm::sm83& sm83)
 {
-    std::ofstream log(log_file, std::ios::app);
-
     auto& regs = sm83.register_;
-    auto& mem = sm83.memory_.memory_;
+    auto& mem  = sm83.memory_.memory_;
 
-    if (!log) {
-        throw std::runtime_error("Failed to open log file");
-    }
-
-    log << std::format("A:{:02X} F:{:02X} B:{:02X} C:{:02X} D:{:02X} E:{:02X} "
+    return std::format("A:{:02X} F:{:02X} B:{:02X} C:{:02X} D:{:02X} E:{:02X} "
         "H:{:02X} L:{:02X} SP:{:04X} PC:{:04X} PCMEM:{:02X},{:02X},{:02X},{:02X}\n",
         regs.a, regs.f._, regs.b, regs.c, regs.d, regs.e,
         regs.h, regs.l, regs.sp, regs.pc,
@@ -59,13 +53,14 @@ auto main() -> int
     auto& memory         = sm83.memory_.memory_;
 
     std::memcpy(sm83.memory_.memory_.data(), cartridge.data(), cartridge.size());
-    std::remove("debug.log");
 
     auto count = 0;
+    std::string debug_log_buffer{};
+
     while (true)
     {
-        log_register_state(sm83);
-        //if (sm83.register_.pc == 0xC7B2) __debugbreak();
+        debug_log_buffer += log_register_state(sm83);
+        
         sm83.cycle();
 
         auto& serial_active = memory[0xFF02];
@@ -75,8 +70,12 @@ auto main() -> int
             //std::println("serial out: {}", memory[0xFF01]);
         }
 
-        if (++count >= 1256634) __debugbreak();
+        if (++count >= 1256634) break;
     }
+
+    std::ofstream log{};
+    log.open("debug.log", std::ios::trunc);
+    log.write(debug_log_buffer.c_str(), debug_log_buffer.size());
 
     std::flush(std::cout);
     return 0;
