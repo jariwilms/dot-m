@@ -7,21 +7,9 @@ import dotm.sm83_memory;
 import dotm.sm83_register;
 import dotm.types;
 
-export namespace dotm::arc
-{
-    using instruction_pointer_t = dotm::void_t(*)();
-    void my_function()
-    {
-
-    }
-    auto constexpr instruction_set = std::array<arc::instruction_pointer_t, 0xFF>
-    {
-        my_function, 
-    };
-}
 export namespace dotm
 {
-    auto constexpr jump_table_name = std::array<dotm::char_t const*, 0x100>
+    auto constexpr instruction_identifiers = std::array<dotm::char_t const*, 0x100>
     {
         //       x0",          x1",          x2",          x3",          x4",          x5",          x6",          x7", 
         "nop       ", "ld_rr_nn  ", "ld_drr_a  ", "inc_rr    ", "inc_r     ", "dec_r     ", "ld_r_n    ", "rlca      ", //00x
@@ -69,6 +57,7 @@ export namespace dotm
         using instruction_pointer_t = dotm::void_t(sm83::*)();
 
         sm83()
+            : memory_{}
         {
             register_.a   = 0x01;
             register_.f._ = 0xB0;
@@ -80,16 +69,50 @@ export namespace dotm
             register_.l   = 0x4D;
             register_.sp  = 0xFFFE;
             register_.pc  = 0x0100;
+
+            interrupt_master_enable_     = dotm::false_;
+            interrupt_master_enable_next = 0u;
+            is_running_                  = dotm::true_;
         }
 
+        int cycle_count = 0;
         void cycle()
         {
-            //auto const current = register_.pc;
+            ++cycle_count;
+
+            if (interrupt_master_enable_next > 0u)
+            {
+                --interrupt_master_enable_next;
+
+                if (interrupt_master_enable_next == 0u) interrupt_master_enable_ = dotm::true_;
+            }
+
+            auto       interrupt_flag   = memory_.read(0xFF0F);
+            auto const interrupt_enable = memory_.read(0xFFFF);
+            auto const interrupts       = static_cast<dotm::uint8_t>(interrupt_enable & interrupt_flag & 0x1F);
+            auto const jumps            = std::array<dotm::uint16_t, 5u>{ 0x40, 0x48, 0x50, 0x58, 0x60 };
+
+            if (interrupt_master_enable_ && interrupts)
+            {
+                interrupt_master_enable_ = dotm::false_;
+
+                for (auto i = 0u; i < jumps.size(); ++i)
+                {
+                    if (bit::test(interrupts, i))
+                    {
+                        memory_.write(0xFF0F, bit::set(interrupt_flag, i, dotm::false_));
+
+                        auto const [low_pc, high_pc] = bit::unpack<bit::endian_e::little, dotm::uint8_t>(register_.pc);
+                        memory_.write(--register_.sp, high_pc);
+                        memory_.write(--register_.sp, low_pc );
+
+                        register_.pc = jumps[i];
+                        break;
+                    }
+                }
+            }
 
             instruction_       = fetch  ();
-            //std::print("PC: {:X}\t", current);
-            //std::println("I: {:0<2X}: {}", memory_.read(current), dotm::jump_table_name[instruction_]);
-            
             auto const pointer = decode (instruction_);
                                  execute(pointer);
         }
@@ -103,42 +126,42 @@ export namespace dotm
         {
             auto constexpr jump_table = std::array<instruction_pointer_t, 0x100>
             {
-                //             x0,                x1,                x2,                x3,                x4,                x5,                x6,                x7, 
-                &sm83::nop       , &sm83::ld_rr_nn  , &sm83::ld_drr_a  , &sm83::inc_rr    , &sm83::inc_r     , &sm83::dec_r     , &sm83::ld_r_n    , &sm83::rlca      , //00x
-                &sm83::ld_dnn_sp , &sm83::add_hl_rr , &sm83::ld_a_drr  , &sm83::dec_rr    , &sm83::inc_r     , &sm83::dec_r     , &sm83::ld_r_n    , &sm83::rrca      , //01x
-                &sm83::stop      , &sm83::ld_rr_nn  , &sm83::ld_drr_a  , &sm83::inc_rr    , &sm83::inc_r     , &sm83::dec_r     , &sm83::ld_r_n    , &sm83::rla       , //02x
-                &sm83::jr_e      , &sm83::add_hl_rr , &sm83::ld_a_drr  , &sm83::dec_rr    , &sm83::inc_r     , &sm83::dec_r     , &sm83::ld_r_n    , &sm83::rra       , //03x
-                &sm83::jr_cc_e   , &sm83::ld_rr_nn  , &sm83::ld_dhli_a , &sm83::inc_rr    , &sm83::inc_r     , &sm83::dec_r     , &sm83::ld_r_n    , &sm83::daa       , //04x
-                &sm83::jr_cc_e   , &sm83::add_hl_rr , &sm83::ld_a_dhli , &sm83::dec_rr    , &sm83::inc_r     , &sm83::dec_r     , &sm83::ld_r_n    , &sm83::cpl       , //05x
-                &sm83::jr_cc_e   , &sm83::ld_rr_nn  , &sm83::ld_dhld_a , &sm83::inc_rr    , &sm83::inc_dhl   , &sm83::dec_dhl   , &sm83::ld_dhl_n  , &sm83::scf       , //06x
-                &sm83::jr_cc_e   , &sm83::add_hl_rr , &sm83::ld_a_dhld , &sm83::dec_rr    , &sm83::inc_r     , &sm83::dec_r     , &sm83::ld_r_n    , &sm83::ccf       , //07x
+                //             _0,                _1,                _2,                _3,                _4,                _5,                _6,                _7, 
+                &sm83::nop       , &sm83::ld_rr_nn  , &sm83::ld_drr_a  , &sm83::inc_rr    , &sm83::inc_r     , &sm83::dec_r     , &sm83::ld_r_n    , &sm83::rlca      , //000_
+                &sm83::ld_dnn_sp , &sm83::add_hl_rr , &sm83::ld_a_drr  , &sm83::dec_rr    , &sm83::inc_r     , &sm83::dec_r     , &sm83::ld_r_n    , &sm83::rrca      , //001_
+                &sm83::stop      , &sm83::ld_rr_nn  , &sm83::ld_drr_a  , &sm83::inc_rr    , &sm83::inc_r     , &sm83::dec_r     , &sm83::ld_r_n    , &sm83::rla       , //002_
+                &sm83::jr_e      , &sm83::add_hl_rr , &sm83::ld_a_drr  , &sm83::dec_rr    , &sm83::inc_r     , &sm83::dec_r     , &sm83::ld_r_n    , &sm83::rra       , //003_
+                &sm83::jr_cc_e   , &sm83::ld_rr_nn  , &sm83::ld_dhli_a , &sm83::inc_rr    , &sm83::inc_r     , &sm83::dec_r     , &sm83::ld_r_n    , &sm83::daa       , //004_
+                &sm83::jr_cc_e   , &sm83::add_hl_rr , &sm83::ld_a_dhli , &sm83::dec_rr    , &sm83::inc_r     , &sm83::dec_r     , &sm83::ld_r_n    , &sm83::cpl       , //005_
+                &sm83::jr_cc_e   , &sm83::ld_rr_nn  , &sm83::ld_dhld_a , &sm83::inc_rr    , &sm83::inc_dhl   , &sm83::dec_dhl   , &sm83::ld_dhl_n  , &sm83::scf       , //006_
+                &sm83::jr_cc_e   , &sm83::add_hl_rr , &sm83::ld_a_dhld , &sm83::dec_rr    , &sm83::inc_r     , &sm83::dec_r     , &sm83::ld_r_n    , &sm83::ccf       , //007_
                                                                                                                                                                       
-                &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_dhl  , &sm83::ld_r_r    , //10x
-                &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_dhl  , &sm83::ld_r_r    , //11x
-                &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_dhl  , &sm83::ld_r_r    , //12x
-                &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_dhl  , &sm83::ld_r_r    , //13x
-                &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_dhl  , &sm83::ld_r_r    , //14x
-                &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_dhl  , &sm83::ld_r_r    , //15x
-                &sm83::ld_dhl_r  , &sm83::ld_dhl_r  , &sm83::ld_dhl_r  , &sm83::ld_dhl_r  , &sm83::ld_dhl_r  , &sm83::ld_dhl_r  , &sm83::halt      , &sm83::ld_dhl_r  , //16x
-                &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_dhl  , &sm83::ld_r_r    , //17x
+                &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_dhl  , &sm83::ld_r_r    , //010_
+                &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_dhl  , &sm83::ld_r_r    , //011_
+                &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_dhl  , &sm83::ld_r_r    , //012_
+                &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_dhl  , &sm83::ld_r_r    , //013_
+                &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_dhl  , &sm83::ld_r_r    , //014_
+                &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_dhl  , &sm83::ld_r_r    , //015_
+                &sm83::ld_dhl_r  , &sm83::ld_dhl_r  , &sm83::ld_dhl_r  , &sm83::ld_dhl_r  , &sm83::ld_dhl_r  , &sm83::ld_dhl_r  , &sm83::halt      , &sm83::ld_dhl_r  , //016_
+                &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_r    , &sm83::ld_r_dhl  , &sm83::ld_r_r    , //017_
                                                                                                                                                                       
-                &sm83::add_a_r   , &sm83::add_a_r   , &sm83::add_a_r   , &sm83::add_a_r   , &sm83::add_a_r   , &sm83::add_a_r   , &sm83::add_a_dhl , &sm83::add_a_r   , //20x
-                &sm83::adc_a_r   , &sm83::adc_a_r   , &sm83::adc_a_r   , &sm83::adc_a_r   , &sm83::adc_a_r   , &sm83::adc_a_r   , &sm83::adc_a_dhl , &sm83::adc_a_r   , //21x
-                &sm83::sub_a_r   , &sm83::sub_a_r   , &sm83::sub_a_r   , &sm83::sub_a_r   , &sm83::sub_a_r   , &sm83::sub_a_r   , &sm83::sub_a_dhl , &sm83::sub_a_r   , //22x
-                &sm83::sbc_a_r   , &sm83::sbc_a_r   , &sm83::sbc_a_r   , &sm83::sbc_a_r   , &sm83::sbc_a_r   , &sm83::sbc_a_r   , &sm83::sbc_a_dhl , &sm83::sbc_a_r   , //23x
-                &sm83::and_a_r   , &sm83::and_a_r   , &sm83::and_a_r   , &sm83::and_a_r   , &sm83::and_a_r   , &sm83::and_a_r   , &sm83::and_a_dhl , &sm83::and_a_r   , //24x
-                &sm83::xor_a_r   , &sm83::xor_a_r   , &sm83::xor_a_r   , &sm83::xor_a_r   , &sm83::xor_a_r   , &sm83::xor_a_r   , &sm83::xor_a_dhl , &sm83::xor_a_r   , //25x
-                &sm83::or_a_r    , &sm83::or_a_r    , &sm83::or_a_r    , &sm83::or_a_r    , &sm83::or_a_r    , &sm83::or_a_r    , &sm83::or_a_dhl  , &sm83::or_a_r    , //26x
-                &sm83::cp_a_r    , &sm83::cp_a_r    , &sm83::cp_a_r    , &sm83::cp_a_r    , &sm83::cp_a_r    , &sm83::cp_a_r    , &sm83::cp_a_dhl  , &sm83::cp_a_r    , //27x
+                &sm83::add_a_r   , &sm83::add_a_r   , &sm83::add_a_r   , &sm83::add_a_r   , &sm83::add_a_r   , &sm83::add_a_r   , &sm83::add_a_dhl , &sm83::add_a_r   , //020_
+                &sm83::adc_a_r   , &sm83::adc_a_r   , &sm83::adc_a_r   , &sm83::adc_a_r   , &sm83::adc_a_r   , &sm83::adc_a_r   , &sm83::adc_a_dhl , &sm83::adc_a_r   , //021_
+                &sm83::sub_a_r   , &sm83::sub_a_r   , &sm83::sub_a_r   , &sm83::sub_a_r   , &sm83::sub_a_r   , &sm83::sub_a_r   , &sm83::sub_a_dhl , &sm83::sub_a_r   , //022_
+                &sm83::sbc_a_r   , &sm83::sbc_a_r   , &sm83::sbc_a_r   , &sm83::sbc_a_r   , &sm83::sbc_a_r   , &sm83::sbc_a_r   , &sm83::sbc_a_dhl , &sm83::sbc_a_r   , //023_
+                &sm83::and_a_r   , &sm83::and_a_r   , &sm83::and_a_r   , &sm83::and_a_r   , &sm83::and_a_r   , &sm83::and_a_r   , &sm83::and_a_dhl , &sm83::and_a_r   , //024_
+                &sm83::xor_a_r   , &sm83::xor_a_r   , &sm83::xor_a_r   , &sm83::xor_a_r   , &sm83::xor_a_r   , &sm83::xor_a_r   , &sm83::xor_a_dhl , &sm83::xor_a_r   , //025_
+                &sm83::or_a_r    , &sm83::or_a_r    , &sm83::or_a_r    , &sm83::or_a_r    , &sm83::or_a_r    , &sm83::or_a_r    , &sm83::or_a_dhl  , &sm83::or_a_r    , //026_
+                &sm83::cp_a_r    , &sm83::cp_a_r    , &sm83::cp_a_r    , &sm83::cp_a_r    , &sm83::cp_a_r    , &sm83::cp_a_r    , &sm83::cp_a_dhl  , &sm83::cp_a_r    , //027_
                 
-                &sm83::ret_cc    , &sm83::pop_rr    , &sm83::jp_cc_nn  , &sm83::jp_nn     , &sm83::call_cc_nn, &sm83::push_rr   , &sm83::add_a_n   , &sm83::rst       , //30x
-                &sm83::ret_cc    , &sm83::ret       , &sm83::jp_cc_nn  , &sm83::prefix    , &sm83::call_cc_nn, &sm83::call_nn   , &sm83::adc_a_n   , &sm83::rst       , //31x
-                &sm83::ret_cc    , &sm83::pop_rr    , &sm83::jp_cc_nn  , &sm83::_         , &sm83::call_cc_nn, &sm83::push_rr   , &sm83::sub_a_n   , &sm83::rst       , //32x
-                &sm83::ret_cc    , &sm83::reti      , &sm83::jp_cc_nn  , &sm83::_         , &sm83::call_cc_nn, &sm83::_         , &sm83::sbc_a_n   , &sm83::rst       , //33x
-                &sm83::ldh_dn_a  , &sm83::pop_rr    , &sm83::ldh_dc_a  , &sm83::_         , &sm83::_         , &sm83::push_rr   , &sm83::and_a_n   , &sm83::rst       , //34x
-                &sm83::add_sp_e  , &sm83::jp_hl     , &sm83::ld_dnn_a  , &sm83::_         , &sm83::_         , &sm83::_         , &sm83::xor_a_n   , &sm83::rst       , //35x
-                &sm83::ldh_a_dn  , &sm83::pop_rr    , &sm83::ldh_a_dc  , &sm83::di        , &sm83::_         , &sm83::push_rr   , &sm83::or_a_n    , &sm83::rst       , //36x
-                &sm83::ld_hl_sp_e, &sm83::ld_sp_hl  , &sm83::ld_a_dnn  , &sm83::ei        , &sm83::_         , &sm83::_         , &sm83::cp_a_n    , &sm83::rst       , //37x
+                &sm83::ret_cc    , &sm83::pop_rr    , &sm83::jp_cc_nn  , &sm83::jp_nn     , &sm83::call_cc_nn, &sm83::push_rr   , &sm83::add_a_n   , &sm83::rst       , //030_
+                &sm83::ret_cc    , &sm83::ret       , &sm83::jp_cc_nn  , &sm83::prefix    , &sm83::call_cc_nn, &sm83::call_nn   , &sm83::adc_a_n   , &sm83::rst       , //031_
+                &sm83::ret_cc    , &sm83::pop_rr    , &sm83::jp_cc_nn  , &sm83::_         , &sm83::call_cc_nn, &sm83::push_rr   , &sm83::sub_a_n   , &sm83::rst       , //032_
+                &sm83::ret_cc    , &sm83::reti      , &sm83::jp_cc_nn  , &sm83::_         , &sm83::call_cc_nn, &sm83::_         , &sm83::sbc_a_n   , &sm83::rst       , //033_
+                &sm83::ldh_dn_a  , &sm83::pop_rr    , &sm83::ldh_dc_a  , &sm83::_         , &sm83::_         , &sm83::push_rr   , &sm83::and_a_n   , &sm83::rst       , //034_
+                &sm83::add_sp_e  , &sm83::jp_hl     , &sm83::ld_dnn_a  , &sm83::_         , &sm83::_         , &sm83::_         , &sm83::xor_a_n   , &sm83::rst       , //035_
+                &sm83::ldh_a_dn  , &sm83::pop_rr    , &sm83::ldh_a_dc  , &sm83::di        , &sm83::_         , &sm83::push_rr   , &sm83::or_a_n    , &sm83::rst       , //036_
+                &sm83::ld_hl_sp_e, &sm83::ld_sp_hl  , &sm83::ld_a_dnn  , &sm83::ei        , &sm83::_         , &sm83::_         , &sm83::cp_a_n    , &sm83::rst       , //037_
             };
 
             return jump_table[instruction];
@@ -182,8 +205,8 @@ export namespace dotm
         }
         void ld_dnn_sp ()
         {
-            auto const low_byte          = memory_.read(register_.sp++);
-            auto const high_byte         = memory_.read(register_.sp++);
+            auto const low_byte          = memory_.read(register_.pc++);
+            auto const high_byte         = memory_.read(register_.pc++);
             auto const immediate         = bit::pack  <bit::endian_e::little, dotm::uint16_t>(low_byte, high_byte);
             auto const [low_sp, high_sp] = bit::unpack<bit::endian_e::little, dotm::uint8_t >(register_.sp);
             
@@ -192,26 +215,51 @@ export namespace dotm
         }
         void inc_rr    ()
         {
-            auto const index = bit::extract<dotm::uint16_t>(instruction_, 4u, 2u);
-            
-            register_[index] = register_[index] + dotm::uint16_t{ 1u };
+            if (instruction_ == 0x33)
+            {
+                ++register_.sp;
+            }
+            else
+            {
+                auto const index = bit::extract<dotm::uint16_t>(instruction_, 4u, 2u);
+                register_[index] = register_[index] + dotm::uint16_t{ 1u };
+            }
         }
         void dec_rr    ()
         {
-            auto const index = bit::extract<dotm::uint16_t>(instruction_, 4u, 2u);
-            
-            register_[index] = register_[index] - dotm::uint16_t{ 1u };
+            if (instruction_ == 0x3B)
+            {
+                --register_.sp;
+            }
+            else
+            {
+                auto const index = bit::extract<dotm::uint16_t>(instruction_, 4u, 2u);
+                register_[index] = register_[index] - dotm::uint16_t{ 1u };
+            }
         }
         void add_hl_rr ()
         {
-            auto const index   = bit::extract<dotm::uint16_t>(instruction_, 4u, 2u);
-            auto const addend  = register_[index];
-            auto const operand = register_.hl;
+            if (instruction_ == 0x39)
+            {
+                auto const addend  = register_.sp;
+                auto const operand = register_.hl;
             
-            register_.hl       = register_.hl + addend;
-            register_.f.n      = dotm::false_;
-            register_.f.h      = bit::check_half_carry<std::plus>(operand, addend);
-            register_.f.c      = bit::check_carry     <std::plus>(operand, addend);
+                register_.hl       = register_.hl + addend;
+                register_.f.n      = dotm::false_;
+                register_.f.h      = bit::check_half_carry<std::plus>(operand, addend);
+                register_.f.c      = bit::check_carry     <std::plus>(operand, addend);
+            }
+            else
+            {
+                auto const index   = bit::extract<dotm::uint16_t>(instruction_, 4u, 2u);
+                auto const addend  = register_[index];
+                auto const operand = register_.hl;
+            
+                register_.hl       = register_.hl + addend;
+                register_.f.n      = dotm::false_;
+                register_.f.h      = bit::check_half_carry<std::plus>(operand, addend);
+                register_.f.c      = bit::check_carry     <std::plus>(operand, addend);
+            }
         }
         void inc_r     ()
         {
@@ -327,6 +375,11 @@ export namespace dotm
         {
             auto const offset = static_cast<dotm::int8_t>(memory_.read(register_.pc++));
             register_.pc      = register_.pc + offset;
+
+            if (offset == static_cast<dotm::int8_t>(0xFE))
+            {
+                is_running_ = dotm::false_;
+            }
         }
         void jr_cc_e   ()
         {
@@ -596,26 +649,24 @@ export namespace dotm
         }
         void reti      ()
         {
-            auto const low_byte  = memory_.read(register_.sp++);
-            auto const high_byte = memory_.read(register_.sp++);
-            register_.pc         = bit::pack<bit::endian_e::little, dotm::uint16_t>(low_byte, high_byte);
-            memory_.write(0xFFFF, dotm::true_);
+            auto const low_byte      = memory_.read(register_.sp++);
+            auto const high_byte     = memory_.read(register_.sp++);
+            register_.pc             = bit::pack<bit::endian_e::little, dotm::uint16_t>(low_byte, high_byte);
+            interrupt_master_enable_ = dotm::true_;
         }
         void jp_cc_nn  ()
         {
+            auto const condition = bit::extract(instruction_, 3u, 2u);
             auto const low_byte  = memory_.read(register_.pc++);
             auto const high_byte = memory_.read(register_.pc++);
-            auto const immediate = bit::pack<bit::endian_e::little, dotm::uint16_t>(low_byte, high_byte);
-            auto const condition = bit::extract(instruction_, 4u, 2u);
 
-            switch (condition)
+            if ((condition == 0u && register_.f.z == dotm::false_) ||
+                (condition == 1u && register_.f.z == dotm::true_ ) ||
+                (condition == 2u && register_.f.c == dotm::false_) ||
+                (condition == 3u && register_.f.c == dotm::true_ )  )
             {
-                case 0u: if (!register_.f.z) register_.pc = immediate; break;
-                case 1u: if ( register_.f.z) register_.pc = immediate; break;
-                case 2u: if (!register_.f.c) register_.pc = immediate; break;
-                case 3u: if ( register_.f.c) register_.pc = immediate; break;
-
-                default: std::unreachable();
+                auto const immediate = bit::pack<bit::endian_e::little, dotm::uint16_t>(low_byte, high_byte);
+                register_.pc         = immediate;
             }
         }
         void jp_nn     ()
@@ -633,76 +684,27 @@ export namespace dotm
         {
             auto const low_byte  = memory_.read(register_.pc++);
             auto const high_byte = memory_.read(register_.pc++);
-            auto const immediate = bit::pack<bit::endian_e::little, dotm::uint16_t>(low_byte, high_byte);
-            auto const condition = bit::extract(instruction_, 4u, 2u);
+            auto const condition = bit::extract(instruction_, 3u, 2u);
 
-            switch (condition)
+            if ((condition == 0u && register_.f.z == dotm::false_) ||
+                (condition == 1u && register_.f.z == dotm::true_ ) ||
+                (condition == 2u && register_.f.c == dotm::false_) ||
+                (condition == 3u && register_.f.c == dotm::true_ )  )
             {
-                case 0u:
-                {
-                    if (!register_.f.z)
-                    {
-                        auto const [low, high] = bit::unpack<bit::endian_e::little, dotm::uint8_t>(register_.pc);
+                auto const [low, high] = bit::unpack<bit::endian_e::little, dotm::uint8_t>(register_.pc);
 
-                        memory_.write(--register_.sp, high);
-                        memory_.write(--register_.sp, low );
-                
-                        register_.pc = immediate;
-                    }
+                memory_.write(--register_.sp, high);
+                memory_.write(--register_.sp, low );
 
-                    break;
-                }
-                case 1u:
-                {
-                    if ( register_.f.z)
-                    {
-                        auto const [low, high] = bit::unpack<bit::endian_e::little, dotm::uint8_t>(register_.pc);
-
-                        memory_.write(--register_.sp, high);
-                        memory_.write(--register_.sp, low );
-                
-                        register_.pc = immediate;
-                    }
-
-                    break;
-                }
-                case 2u:
-                {
-                    if (!register_.f.c)
-                    {
-                        auto const [low, high] = bit::unpack<bit::endian_e::little, dotm::uint8_t>(register_.pc);
-
-                        memory_.write(--register_.sp, high);
-                        memory_.write(--register_.sp, low );
-                
-                        register_.pc = immediate;
-                    }
-
-                    break;
-                }
-                case 3u:
-                {
-                    if ( register_.f.c)
-                    {
-                        auto const [low, high] = bit::unpack<bit::endian_e::little, dotm::uint8_t>(register_.pc);
-
-                        memory_.write(--register_.sp, high);
-                        memory_.write(--register_.sp, low );
-                
-                        register_.pc = immediate;
-                    }
-
-                    break;
-                }
-
-                default: std::unreachable();
+                auto const immediate   = bit::pack<bit::endian_e::little, dotm::uint16_t>(low_byte, high_byte);
+                register_.pc           = immediate;
             }
         }
         void call_nn   ()
         {
             auto const low_byte          = memory_.read(register_.pc++);
             auto const high_byte         = memory_.read(register_.pc++);
-            auto const immediate         = bit::pack<bit::endian_e::little, dotm::uint16_t>(low_byte, high_byte);
+            auto const immediate         = bit::pack  <bit::endian_e::little, dotm::uint16_t>(low_byte, high_byte);
             auto const [low_pc, high_pc] = bit::unpack<bit::endian_e::little, dotm::uint8_t >(register_.pc);
                 
             memory_.write(--register_.sp, high_pc);
@@ -894,14 +896,14 @@ export namespace dotm
         }
         void add_sp_e  ()
         {
-            auto const offset  = memory_.read(register_.pc++);
+            auto const offset  = static_cast<dotm::int8_t>(memory_.read(register_.pc++));
             auto const operand = register_.sp;
             
-            register_.sp       = register_.sp + static_cast<dotm::int8_t>(offset);
-            register_.f.z      = register_.sp == 0u;
+            register_.sp       = register_.sp + offset;
+            register_.f.z      = dotm::false_;
             register_.f.n      = dotm::false_;
-            register_.f.h      = bit::check_half_carry<std::plus>(static_cast<dotm::uint8_t>(operand), offset);
-            register_.f.c      = bit::check_carry     <std::plus>(static_cast<dotm::uint8_t>(operand), offset);
+            register_.f.h      = bit::check_half_carry<std::plus>(static_cast<dotm::uint8_t>(operand), static_cast<dotm::uint8_t>(offset));
+            register_.f.c      = bit::check_carry     <std::plus>(static_cast<dotm::uint8_t>(operand), static_cast<dotm::uint8_t>(offset));
         }
         void ld_hl_sp_e()
         {
@@ -920,11 +922,11 @@ export namespace dotm
         }
         void di        ()
         {
-            memory_.write(0xFFFF, dotm::false_);
+            interrupt_master_enable_ = dotm::false_;
         }
         void ei        ()
         {
-            memory_.write(0xFFFF, dotm::true_);
+            interrupt_master_enable_next = 2u;
         }
         void ld_dhli_a ()
         {
@@ -1064,18 +1066,17 @@ export namespace dotm
         }
         void _         ()
         {
-            throw;
-            while (dotm::true_);
+            is_running_ = dotm::false_;
+            //while (dotm::true_);
         }
-
-
-
 
 
 
         dotm::bool_t         is_running_;
         dotm::instruction8_t instruction_;
-        memory_t            memory_;
-        register_t          register_;
+        memory_t             memory_;
+        register_t           register_;
+        dotm::bool_t         interrupt_master_enable_;
+        dotm::uint8_t        interrupt_master_enable_next;
     };
 }
