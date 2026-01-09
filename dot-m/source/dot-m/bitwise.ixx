@@ -96,11 +96,6 @@ export namespace dotm::bit
         else static_assert(dotm::false_, "invalid direction");
     }
     template<std::unsigned_integral value_t>
-    auto constexpr check_parity     (value_t value) -> dotm::bool_t
-    {
-        return (bit::count_one(value) % 2u) == 1u;
-    }
-    template<std::unsigned_integral value_t>
     auto constexpr is_power_of_2    (value_t value) -> dotm::bool_t
     {
         return std::has_single_bit(value);
