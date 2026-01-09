@@ -182,18 +182,17 @@ export namespace dotm::bit
     template<bit::operation_e operation_v, std::unsigned_integral value_t>
     auto constexpr test_carry       (value_t alpha, value_t beta, dotm::bool_t carry_flag = dotm::false_) -> dotm::bool_t
     {
-             if constexpr (operation_v == bit::operation_e::add     ) return static_cast<value_t>(alpha + beta + carry_flag) < alpha;
-        else if constexpr (operation_v == bit::operation_e::subtract) return static_cast<value_t>(        beta + carry_flag) > alpha;
+             if constexpr (operation_v == bit::operation_e::add     ) return alpha + beta + carry_flag > std::numeric_limits<value_t>::max();
+        else if constexpr (operation_v == bit::operation_e::subtract) return alpha - beta - carry_flag < std::numeric_limits<value_t>::min();
         else static_assert(dotm::false_, "invalid operation");
     }
     template<bit::operation_e operation_v, std::unsigned_integral value_t>
     auto constexpr test_half_carry  (value_t alpha, value_t beta, dotm::bool_t carry_flag = dotm::false_) -> dotm::bool_t
     {
-        auto constexpr mask      = static_cast<value_t>(std::numeric_limits<value_t>::max() >> 4u);
-        auto constexpr carry_bit = mask + 1u;
+        auto constexpr mask = static_cast<value_t>(std::numeric_limits<value_t>::max() >> 4u);
 
-             if constexpr (operation_v == bit::operation_e::add     ) return ((alpha & mask) + (beta & mask) + carry_flag) & carry_bit;
-        else if constexpr (operation_v == bit::operation_e::subtract) return ((alpha & mask) - (beta & mask) - carry_flag) & carry_bit;
+             if constexpr (operation_v == bit::operation_e::add     ) return ((alpha & mask) + (beta & mask) + carry_flag) & (mask + 1u);
+        else if constexpr (operation_v == bit::operation_e::subtract) return ((alpha & mask) - (beta & mask) - carry_flag) & (mask + 1u);
         else static_assert(dotm::false_, "invalid operation");
     }
 }
