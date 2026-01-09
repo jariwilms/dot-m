@@ -246,8 +246,8 @@ export namespace dotm
             
                 register_.hl       = register_.hl + addend;
                 register_.f.n      = dotm::false_;
-                register_.f.h      = bit::check_half_carry<std::plus>(operand, addend);
-                register_.f.c      = bit::check_carry     <std::plus>(operand, addend);
+                register_.f.h      = bit::test_half_carry<bit::operation_e::add>(operand, addend);
+                register_.f.c      = bit::test_carry<bit::operation_e::add>(operand, addend);
             }
             else
             {
@@ -257,8 +257,8 @@ export namespace dotm
             
                 register_.hl       = register_.hl + addend;
                 register_.f.n      = dotm::false_;
-                register_.f.h      = bit::check_half_carry<std::plus>(operand, addend);
-                register_.f.c      = bit::check_carry     <std::plus>(operand, addend);
+                register_.f.h      = bit::test_half_carry<bit::operation_e::add>(operand, addend);
+                register_.f.c      = bit::test_carry<bit::operation_e::add>(operand, addend);
             }
         }
         void inc_r     ()
@@ -269,7 +269,7 @@ export namespace dotm
             register_[index]   = register_[index] + dotm::uint8_t{ 1u };
             register_.f.z      = register_[index] == 0u;
             register_.f.n      = dotm::false_;
-            register_.f.h      = bit::check_half_carry<std::plus>(operand, dotm::uint8_t{ 1u });
+            register_.f.h      = bit::test_half_carry<bit::operation_e::add>(operand, dotm::uint8_t{ 1u });
         }
         void dec_r     ()
         {
@@ -279,7 +279,7 @@ export namespace dotm
             register_[index]   = register_[index] - dotm::uint8_t{ 1u };
             register_.f.z      = register_[index] == 0u;
             register_.f.n      = dotm::true_;
-            register_.f.h      = bit::check_half_carry<std::minus>(operand, dotm::uint8_t{ 1u });
+            register_.f.h      = bit::test_half_carry<bit::operation_e::subtract>(operand, dotm::uint8_t{ 1u });
         }
         void ld_r_n    ()
         {
@@ -424,8 +424,8 @@ export namespace dotm
             register_.a        = register_.a + addend;
             register_.f.z      = register_.a == 0u;
             register_.f.n      = dotm::false_;
-            register_.f.h      = bit::check_half_carry<std::plus>(operand, addend);
-            register_.f.c      = bit::check_carry     <std::plus>(operand, addend);
+            register_.f.h      = bit::test_half_carry<bit::operation_e::add>(operand, addend);
+            register_.f.c      = bit::test_carry<bit::operation_e::add>(operand, addend);
         }
         void adc_a_r   ()
         {
@@ -448,8 +448,8 @@ export namespace dotm
             register_.a        = register_.a - register_[index];
             register_.f.z      = register_.a == 0u;
             register_.f.n      = dotm::true_;
-            register_.f.h      = bit::check_half_carry<std::minus>(operand, register_[index]);
-            register_.f.c      = bit::check_carry     <std::minus>(operand, register_[index]);
+            register_.f.h      = bit::test_half_carry<bit::operation_e::subtract>(operand, register_[index]);
+            register_.f.c      = bit::test_carry<bit::operation_e::subtract>(operand, register_[index]);
         }
         void sbc_a_r   ()
         {
@@ -501,8 +501,8 @@ export namespace dotm
 
             register_.f.z     = result == 0u;
             register_.f.n     = dotm::true_;
-            register_.f.h     = bit::check_half_carry<std::minus>(register_.a, register_[index]);
-            register_.f.c     = bit::check_carry     <std::minus>(register_.a, register_[index]);
+            register_.f.h     = bit::test_half_carry<bit::operation_e::subtract>(register_.a, register_[index]);
+            register_.f.c     = bit::test_carry<bit::operation_e::subtract>(register_.a, register_[index]);
         }
         void add_a_n   ()
         {
@@ -512,8 +512,8 @@ export namespace dotm
             register_.a        = register_.a + addend;
             register_.f.z      = register_.a == 0u;
             register_.f.n      = dotm::false_;
-            register_.f.h      = bit::check_half_carry<std::plus>(operand, addend);
-            register_.f.c      = bit::check_carry     <std::plus>(operand, addend);
+            register_.f.h      = bit::test_half_carry<bit::operation_e::add>(operand, addend);
+            register_.f.c      = bit::test_carry<bit::operation_e::add>(operand, addend);
         }
         void adc_a_n   ()
         {
@@ -535,8 +535,8 @@ export namespace dotm
             register_.a          = register_.a - immediate;
             register_.f.z        = register_.a == 0u;
             register_.f.n        = dotm::true_;
-            register_.f.h        = bit::check_half_carry<std::minus>(operand, immediate);
-            register_.f.c        = bit::check_carry     <std::minus>(operand, immediate);
+            register_.f.h        = bit::test_half_carry<bit::operation_e::subtract>(operand, immediate);
+            register_.f.c        = bit::test_carry<bit::operation_e::subtract>(operand, immediate);
         }
         void sbc_a_n   ()
         {
@@ -587,8 +587,8 @@ export namespace dotm
 
             register_.f.z        = result == 0u;
             register_.f.n        = dotm::true_;
-            register_.f.h        = bit::check_half_carry<std::minus>(register_.a, immediate);
-            register_.f.c        = bit::check_carry     <std::minus>(register_.a, immediate);
+            register_.f.h        = bit::test_half_carry<bit::operation_e::subtract>(register_.a, immediate);
+            register_.f.c        = bit::test_carry<bit::operation_e::subtract>(register_.a, immediate);
         }
         void ret_cc    ()
         {
@@ -890,8 +890,8 @@ export namespace dotm
             register_.sp       = register_.sp + offset;
             register_.f.z      = dotm::false_;
             register_.f.n      = dotm::false_;
-            register_.f.h      = bit::check_half_carry<std::plus>(static_cast<dotm::uint8_t>(operand), static_cast<dotm::uint8_t>(offset));
-            register_.f.c      = bit::check_carry     <std::plus>(static_cast<dotm::uint8_t>(operand), static_cast<dotm::uint8_t>(offset));
+            register_.f.h      = bit::test_half_carry<bit::operation_e::add>(static_cast<dotm::uint8_t>(operand), static_cast<dotm::uint8_t>(offset));
+            register_.f.c      = bit::test_carry<bit::operation_e::add>(static_cast<dotm::uint8_t>(operand), static_cast<dotm::uint8_t>(offset));
         }
         void ld_hl_sp_e()
         {
@@ -901,8 +901,8 @@ export namespace dotm
             register_.hl       = register_.sp + static_cast<dotm::int8_t>(offset);
             register_.f.z      = dotm::false_;
             register_.f.n      = dotm::false_;
-            register_.f.h      = bit::check_half_carry<std::plus>(static_cast<dotm::uint8_t>(operand), offset);
-            register_.f.c      = bit::check_carry     <std::plus>(static_cast<dotm::uint8_t>(operand), offset);
+            register_.f.h      = bit::test_half_carry<bit::operation_e::add>(static_cast<dotm::uint8_t>(operand), offset);
+            register_.f.c      = bit::test_carry<bit::operation_e::add>(static_cast<dotm::uint8_t>(operand), offset);
         }
         void ld_sp_hl  ()
         {
@@ -940,7 +940,7 @@ export namespace dotm
             memory_.write(register_.hl, value);
             register_.f.z      = value == 0u;
             register_.f.n      = dotm::false_;
-            register_.f.h      = bit::check_half_carry<std::plus>(operand, dotm::uint8_t{ 1u });
+            register_.f.h      = bit::test_half_carry<bit::operation_e::add>(operand, dotm::uint8_t{ 1u });
         }
         void dec_dhl   ()
         {
@@ -950,7 +950,7 @@ export namespace dotm
             memory_.write(register_.hl, value);
             register_.f.z      = value == 0u;
             register_.f.n      = dotm::true_;
-            register_.f.h      = bit::check_half_carry<std::minus>(operand, dotm::uint8_t{ 1u });
+            register_.f.h      = bit::test_half_carry<bit::operation_e::subtract>(operand, dotm::uint8_t{ 1u });
         }
         void ld_dhl_n  ()
         {
@@ -976,8 +976,8 @@ export namespace dotm
             register_.a        = register_.a + addend;
             register_.f.z      = register_.a == 0u;
             register_.f.n      = dotm::false_;
-            register_.f.h      = bit::check_half_carry<std::plus>(operand, addend);
-            register_.f.c      = bit::check_carry     <std::plus>(operand, addend);
+            register_.f.h      = bit::test_half_carry<bit::operation_e::add>(operand, addend);
+            register_.f.c      = bit::test_carry<bit::operation_e::add>(operand, addend);
         }
         void adc_a_dhl ()
         {
@@ -999,8 +999,8 @@ export namespace dotm
             register_.a           = register_.a - subtrahend;
             register_.f.z         = register_.a == 0u;
             register_.f.n         = dotm::true_;
-            register_.f.h         = bit::check_half_carry<std::minus>(operand, subtrahend);
-            register_.f.c         = bit::check_carry     <std::minus>(operand, subtrahend);
+            register_.f.h         = bit::test_half_carry<bit::operation_e::subtract>(operand, subtrahend);
+            register_.f.c         = bit::test_carry<bit::operation_e::subtract>(operand, subtrahend);
         }
         void sbc_a_dhl ()
         {
@@ -1051,8 +1051,8 @@ export namespace dotm
 
             register_.f.z     = result == 0u;
             register_.f.n     = dotm::true_;
-            register_.f.h     = bit::check_half_carry<std::minus>(register_.a, value);
-            register_.f.c     = bit::check_carry     <std::minus>(register_.a, value);
+            register_.f.h     = bit::test_half_carry<bit::operation_e::subtract>(register_.a, value);
+            register_.f.c     = bit::test_carry<bit::operation_e::subtract>(register_.a, value);
         }
         void _         ()
         {

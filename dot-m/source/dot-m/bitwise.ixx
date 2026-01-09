@@ -196,28 +196,6 @@ export namespace dotm::bit
 
         return result;
     }
-
-    template<template<typename...> typename operation_t, std::unsigned_integral value_t>
-    auto constexpr check_carry      (value_t alpha, value_t beta               ) -> dotm::bool_t
-    {
-             if constexpr (std::is_same_v<operation_t<>, std::plus <>>) return static_cast<value_t>(alpha + beta) < alpha;
-        else if constexpr (std::is_same_v<operation_t<>, std::minus<>>) return beta > alpha;
-        else static_assert(dotm::false_, "invalid operation");
-    }
-    template<template<typename...> typename operation_t, std::unsigned_integral value_t>
-    auto constexpr check_half_carry (value_t alpha, value_t beta) -> dotm::bool_t
-    {
-             if constexpr (std::is_same_v<value_t, dotm::uint8_t>)
-        {
-            return operation_t<value_t>{}((alpha & 0x0F), (beta & 0x0F)) > 0x0F;
-        }
-        else if constexpr (std::is_same_v<value_t, dotm::uint16_t>)
-        {
-            auto const result = operation_t<value_t>{}(alpha, beta);
-            return ((alpha ^ beta ^ result) & 0x1000) != 0;
-        }
-        else static_assert(dotm::false_, "invalid type");
-    }
     
     template<bit::operation_e operation_v, std::unsigned_integral value_t>
     auto constexpr test_carry       (value_t alpha, value_t beta, dotm::bool_t carry_flag = dotm::false_) -> dotm::bool_t
