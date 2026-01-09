@@ -71,21 +71,13 @@ export namespace dotm
             register_.pc  = 0x0100;
 
             interrupt_master_enable_     = dotm::false_;
-            interrupt_master_enable_next = 0u;
+            interrupt_master_enable_delay = 0u;
             is_running_                  = dotm::true_;
         }
 
-        int cycle_count = 0;
         void cycle()
         {
-            ++cycle_count;
-
-            if (interrupt_master_enable_next > 0u)
-            {
-                --interrupt_master_enable_next;
-
-                if (interrupt_master_enable_next == 0u) interrupt_master_enable_ = dotm::true_;
-            }
+            if (interrupt_master_enable_delay > 0u && (--interrupt_master_enable_delay == 0u)) interrupt_master_enable_ = dotm::true_;
 
             auto       interrupt_flag   = memory_.read(0xFF0F);
             auto const interrupt_enable = memory_.read(0xFFFF);
@@ -914,7 +906,7 @@ export namespace dotm
         }
         void ei        ()
         {
-            interrupt_master_enable_next = 2u;
+            interrupt_master_enable_delay = 2u;
         }
         void ld_dhli_a ()
         {
@@ -1061,11 +1053,11 @@ export namespace dotm
 
 
 
-        dotm::bool_t         is_running_;
-        dotm::instruction8_t instruction_;
         memory_t             memory_;
         register_t           register_;
+        dotm::bool_t         is_running_;
+        dotm::instruction8_t instruction_;
         dotm::bool_t         interrupt_master_enable_;
-        dotm::uint8_t        interrupt_master_enable_next;
+        dotm::uint8_t        interrupt_master_enable_delay;
     };
 }
