@@ -5,21 +5,28 @@ import dotm.types;
 
 export namespace dotm::bit
 {
+    enum class direction_e
+    {
+        left , 
+        right, 
+    };
     enum class endian_e
     {
         little = std::endian::little, 
         big    = std::endian::big   , 
         native = std::endian::native, 
     };
-    enum class direction_e
-    {
-        left , 
-        right, 
-    };
     enum class shift_e
     {
         arithmetic, 
         logical   , 
+    };
+    enum class operation_e
+    {
+        add     , 
+        subtract, 
+        multiply, 
+        divide  , 
     };
     
     template<std::unsigned_integral value_t, std::unsigned_integral index_t>
@@ -142,28 +149,91 @@ export namespace dotm::bit
         else static_assert(dotm::false_, "invalid endian");
     }
     
+    template<bit::endian_e endian_v, dotm::size_t group_size_v, std::unsigned_integral value_t> requires (group_size_v <= bit::length<value_t>())
+    auto constexpr expand           (value_t value) -> std::array<value_t, (bit::length<value_t>() + group_size_v - 1u) / group_size_v>
+    {
+        auto constexpr value_count = (bit::length<value_t>() + group_size_v - 1u) / group_size_v;
+        auto constexpr mask        = (group_size_v == bit::length<value_t>()) ? ~value_t{ 0 } : (value_t{ 1 } << group_size_v) - 1u;
+        auto           values      = std::array<value_t, value_count>{};
+
+        for (auto index = dotm::size_t{ 0u }; index < value_count; ++index)
+        {
+                 if constexpr (endian_v == bit::endian_e::little)
+            {
+                auto const target_idx = index;
+                values[target_idx]    = (value >> (index * group_size_v)) & mask;
+            }
+            else if constexpr (endian_v == bit::endian_e::big   )
+            {
+                auto const target_index = (value_count - 1u - index);
+                values[target_index]    = (value >> (index * group_size_v)) & mask;
+            }
+            else static_assert(dotm::false_, "invalid endian");
+        }
+
+        return values;
+    }
+    template<bit::endian_e endian_v, dotm::size_t group_size_v, typename value_t, typename element_t, dotm::size_t count_v> requires (group_size_v * count_v <= bit::length<value_t>())
+    auto constexpr compress         (std::array<element_t, count_v> const& values) -> value_t
+    {
+        auto constexpr mask   = (group_size_v == bit::length<element_t>()) ? ~element_t{0} : (element_t{1} << group_size_v) - 1u;
+        auto           result = value_t{ 0u };
+
+        for (auto index = dotm::size_t{ 0u }; index < count_v; ++index)
+        {
+                 if constexpr (endian_v == bit::endian_e::little)
+            {
+                auto const source_index  = index;
+                result                  |= static_cast<value_t>(values[source_index] & mask) << (index * group_size_v);
+            }
+            else if constexpr (endian_v == bit::endian_e::big   )
+            {
+                auto const source_index  = (count_v - 1u - index);
+                result                  |= static_cast<value_t>(values[source_index] & mask) << (index * group_size_v);
+            }
+            else static_assert(dotm::false_, "invalid endian");
+        }
+
+        return result;
+    }
+
     template<template<typename...> typename operation_t, std::unsigned_integral value_t>
     auto constexpr check_carry      (value_t alpha, value_t beta               ) -> dotm::bool_t
     {
              if constexpr (std::is_same_v<operation_t<>, std::plus <>>) return static_cast<value_t>(alpha + beta) < alpha;
         else if constexpr (std::is_same_v<operation_t<>, std::minus<>>) return beta > alpha;
-
-        //return static_cast<value_t>(operation_t<value_t>{}(alpha, beta)) < alpha;
+        else static_assert(dotm::false_, "invalid operation");
     }
     template<template<typename...> typename operation_t, std::unsigned_integral value_t>
     auto constexpr check_half_carry (value_t alpha, value_t beta) -> dotm::bool_t
     {
-        if constexpr (std::is_same_v<value_t, dotm::uint8_t>)
+             if constexpr (std::is_same_v<value_t, dotm::uint8_t>)
         {
-            return (operation_t<value_t>{}((alpha & 0xF), (beta & 0xF)) & 0x10) == 0x10;
+            return operation_t<value_t>{}((alpha & 0x0F), (beta & 0x0F)) > 0x0F;
         }
         else if constexpr (std::is_same_v<value_t, dotm::uint16_t>)
         {
             auto const result = operation_t<value_t>{}(alpha, beta);
             return ((alpha ^ beta ^ result) & 0x1000) != 0;
         }
+        else static_assert(dotm::false_, "invalid type");
+    }
+    
+    template<bit::operation_e operation_v, std::unsigned_integral value_t>
+    auto constexpr test_carry       (value_t alpha, value_t beta, dotm::bool_t carry_flag = dotm::false_) -> dotm::bool_t
+    {
+             if constexpr (operation_v == bit::operation_e::add     ) return static_cast<value_t>(alpha + beta + carry_flag) < alpha;
+        else if constexpr (operation_v == bit::operation_e::subtract) return static_cast<value_t>(        beta + carry_flag) > alpha;
+        else static_assert(dotm::false_, "invalid operation");
+    }
+    template<bit::operation_e operation_v, std::unsigned_integral value_t>
+    auto constexpr test_half_carry  (value_t alpha, value_t beta, dotm::bool_t carry_flag = dotm::false_) -> dotm::bool_t
+    {
+        auto constexpr mask      = static_cast<value_t>(std::numeric_limits<value_t>::max() >> 4u);
+        auto constexpr carry_bit = mask + 1u;
 
-        //return (((alpha & 0xF) + (beta & 0xF)) & 0x10) == 0x10;
-        //return ((alpha ^ beta ^ static_cast<value_t>(operation_t<value_t>{}(alpha, beta))) & (1u << (sizeof(value_t) * 4u))) != 0u;
+             if constexpr (operation_v == bit::operation_e::add     ) return ((alpha & mask) + (beta & mask) + carry_flag) & carry_bit;
+        else if constexpr (operation_v == bit::operation_e::subtract) return ((alpha & mask) - (beta & mask) - carry_flag) & carry_bit;
+        else static_assert(dotm::false_, "invalid operation");
     }
 }
