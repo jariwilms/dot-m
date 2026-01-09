@@ -376,10 +376,10 @@ export namespace dotm
             auto const offset = static_cast<dotm::int8_t>(memory_.read(register_.pc++));
             register_.pc      = register_.pc + offset;
 
-            if (offset == static_cast<dotm::int8_t>(0xFE))
-            {
-                is_running_ = dotm::false_;
-            }
+            //if (offset == static_cast<dotm::int8_t>(0xFE))
+            //{
+            //    is_running_ = dotm::false_;
+            //}
         }
         void jr_cc_e   ()
         {
@@ -429,15 +429,16 @@ export namespace dotm
         }
         void adc_a_r   ()
         {
-            auto const index   = bit::extract<dotm::uint8_t>(instruction_, 0u, 3u);
-            auto const addend  = static_cast<dotm::uint8_t>(register_[index] + register_.f.c);
-            auto const operand = register_.a;
+            auto const index      = bit::extract<dotm::uint8_t>(instruction_, 0u, 3u);
+            auto const addend     = register_[index];
+            auto const carry_flag = register_.f.c;
+            auto const operand    = register_.a;
 
-            register_.a        = register_.a + addend;
-            register_.f.z      = register_.a == 0u;
-            register_.f.n      = dotm::false_;
-            register_.f.h      = bit::check_half_carry<std::plus>(operand, addend);
-            register_.f.c      = bit::check_carry     <std::plus>(operand, addend);
+            register_.a           = register_.a + addend + carry_flag;
+            register_.f.z         = register_.a == 0u;
+            register_.f.n         = dotm::false_;
+            register_.f.h         = ((operand & 0x0F) + (addend & 0x0F) + carry_flag) > 0x0F;
+            register_.f.c         = (static_cast<dotm::uint16_t>(operand) + static_cast<dotm::uint16_t>(addend) + static_cast<dotm::uint16_t>(carry_flag)) > 0xFF;
         }
         void sub_a_r   ()
         {
@@ -453,14 +454,15 @@ export namespace dotm
         void sbc_a_r   ()
         {
             auto const index      = bit::extract<dotm::uint8_t>(instruction_, 0u, 3u);
-            auto const subtrahend = static_cast<dotm::uint8_t>(register_[index] + register_.f.c);
+            auto const subtrahend = register_[index];
+            auto const carry_flag = register_.f.c;
             auto const operand    = register_.a;
 
-            register_.a           = register_.a - subtrahend;
+            register_.a           = register_.a - subtrahend - carry_flag;
             register_.f.z         = register_.a == 0u;
             register_.f.n         = dotm::true_;
-            register_.f.h         = bit::check_half_carry<std::minus>(operand, subtrahend);
-            register_.f.c         = bit::check_carry     <std::minus>(operand, subtrahend);
+            register_.f.h         = ((operand & 0x0F) - (subtrahend & 0x0F) - carry_flag) < 0;
+            register_.f.c         = (static_cast<dotm::int16_t>(operand) - static_cast<dotm::int16_t>(subtrahend) - static_cast<dotm::int16_t>(carry_flag)) < 0;
         }
         void and_a_r   ()
         {
@@ -515,15 +517,15 @@ export namespace dotm
         }
         void adc_a_n   ()
         {
-            auto const immediate = memory_.read(register_.pc++);
-            auto const addend    = static_cast<dotm::uint8_t>(immediate + register_.f.c);
-            auto const operand   = register_.a;
+            auto const immediate  = memory_.read(register_.pc++);
+            auto const carry_flag = register_.f.c;
+            auto const operand    = register_.a;
 
-            register_.a          = register_.a + addend;
-            register_.f.z        = register_.a == 0u;
-            register_.f.n        = dotm::false_;
-            register_.f.h        = bit::check_half_carry<std::plus>(operand, addend);
-            register_.f.c        = bit::check_carry     <std::plus>(operand, addend);
+            register_.a           = register_.a + immediate + carry_flag;
+            register_.f.z         = register_.a == 0u;
+            register_.f.n         = dotm::false_;
+            register_.f.h         = ((operand & 0x0F) + (immediate & 0x0F) + carry_flag) > 0x0F;
+            register_.f.c         = (static_cast<dotm::uint16_t>(operand) + static_cast<dotm::uint16_t>(immediate) + static_cast<dotm::uint16_t>(carry_flag)) > 0xFF;
         }
         void sub_a_n   ()
         {
@@ -538,14 +540,15 @@ export namespace dotm
         }
         void sbc_a_n   ()
         {
-            auto const addend  = memory_.read(register_.pc++);
-            auto const operand = register_.a;
+            auto const immediate  = memory_.read(register_.pc++);
+            auto const carry_flag = register_.f.c;
+            auto const operand    = register_.a;
 
-            register_.a        = register_.a - addend;
-            register_.f.z      = register_.a == 0u;
-            register_.f.n      = dotm::true_;
-            register_.f.h      = bit::check_half_carry<std::minus>(operand, addend);
-            register_.f.c      = bit::check_carry     <std::minus>(operand, addend);
+            register_.a           = register_.a - immediate - carry_flag;
+            register_.f.z         = register_.a == 0u;
+            register_.f.n         = dotm::true_;
+            register_.f.h         = ((operand & 0x0F) - (immediate & 0x0F) - carry_flag) < 0;
+            register_.f.c         = (static_cast<dotm::int16_t>(operand) - static_cast<dotm::int16_t>(immediate) - static_cast<dotm::int16_t>(carry_flag)) < 0;
         }
         void and_a_n   ()
         {
@@ -745,114 +748,99 @@ export namespace dotm
         }
         void prefix    ()
         {
-            auto const instruction = memory_.read(register_.pc++);
-            auto const index       = bit::extract(instruction, 0u, 3u);
-            auto const operation   = bit::extract(instruction, 3u, 5u);
-            auto const bit_index   = bit::extract(instruction, 3u, 3u);
-            auto const operand     = register_[index];
+            auto const instruction      = memory_.read(register_.pc++);
+            auto const index            = bit::extract(instruction, 0u, 3u);
+            auto const bit_index        = bit::extract(instruction, 3u, 3u);
+            auto const prf              = (instruction & 0xF8) >> 3;
+            auto const prf2             = (instruction & 0xC0) >> 6;
+            auto const is_hl_indirect   = (index == 0x06) || (index == 0x0E);
+            auto       operand          = is_hl_indirect ? memory_.read(register_.hl) : register_[index];
+            auto const original_operand = operand;
 
-            switch (operation)
+            if (prf == 0u) //rlc
             {
-                case  0u: //rlc
-                {
-                    register_[index] = bit::rotate<bit::direction_e::left>(register_[index], 1u);
-                    register_.f.z    = register_[index] == 0u;
-                    register_.f.n    = dotm::false_;
-                    register_.f.h    = dotm::false_;
-                    register_.f.c    = bit::test(operand, 7u);
-
-                    break;
-                }
-                case  1u: //rrc
-                {
-                    register_[index] = bit::rotate<bit::direction_e::right>(register_[index], 1u);
-                    register_.f.z    = register_[index] == 0u;
-                    register_.f.n    = dotm::false_;
-                    register_.f.h    = dotm::false_;
-                    register_.f.c    = bit::test(operand, 0u);
-
-                    break;
-                }
-                case  2u: //rl
-                {
-                    register_[index] = bit::rotate<bit::direction_e::left>(register_[index], 1u);
-                    register_[index] = bit::set(register_[index], 0u, register_.f.c);
-                    register_.f.z    = register_[index] == 0u;
-                    register_.f.n    = dotm::false_;
-                    register_.f.h    = dotm::false_;
-                    register_.f.c    = bit::test(operand, 7u);
-
-                    break;
-                }
-                case  3u: //rr
-                {
-                    register_[index] = bit::rotate<bit::direction_e::right>(register_[index], 1u);
-                    register_[index] = bit::set(register_[index], 7u, register_.f.c);
-                    register_.f.z    = register_[index] == 0u;
-                    register_.f.n    = dotm::false_;
-                    register_.f.h    = dotm::false_;
-                    register_.f.c    = bit::test(operand, 0u);
-
-                    break;
-                }
-                case  4u: //sla
-                {
-                    register_[index] = bit::shift<bit::shift_e::arithmetic, bit::direction_e::left>(register_[index], 1u);
-                    register_.f.z    = register_[index] == 0u;
-                    register_.f.n    = dotm::false_;
-                    register_.f.h    = dotm::false_;
-                    register_.f.c    = bit::test(operand, 7u);
-
-                    break;
-                }
-                case  5u: //sra
-                {
-                    register_[index] = bit::shift<bit::shift_e::arithmetic, bit::direction_e::right>(register_[index], 1u);
-                    register_.f.z    = register_[index] == 0u;
-                    register_.f.n    = dotm::false_;
-                    register_.f.h    = dotm::false_;
-                    register_.f.c    = bit::test(operand, 0u);
-
-                    break;
-                }
-                case  6u: //swap
-                {
-                    register_[index] = bit::rotate<bit::direction_e::left>(register_[index], 4u);
-                    register_.f.z    = register_[index] == 0u;
-                    register_.f.n    = dotm::false_;
-                    register_.f.h    = dotm::false_;
-                    register_.f.c    = dotm::false_;
-
-                    break;
-                }
-                case  7u: //srl
-                {
-                    register_[index] = bit::shift<bit::shift_e::logical, bit::direction_e::right>(register_[index], 1u);
-                    register_.f.z    = register_[index] == 0u;
-                    register_.f.n    = dotm::false_;
-                    register_.f.h    = dotm::false_;
-                    register_.f.c    = bit::test(operand, 0u);
-
-                    break;
-                }
-
-                default: std::unreachable();
+                operand = bit::rotate<bit::direction_e::left>(operand, 1u);
+                register_.f.z = operand == 0u;
+                register_.f.c = bit::test(original_operand, 7u);
+                register_.f.n = dotm::false_;
+                register_.f.h = dotm::false_;
             }
-
-            if (instruction & 0x40)
+            else if (prf == 1u) //rrc
             {
-                register_.f.z = bit::test(register_[index], bit_index);
+                operand = bit::rotate<bit::direction_e::right>(operand, 1u);
+                register_.f.z = operand == 0u;
+                register_.f.c = bit::test(original_operand, 0u);
+                register_.f.n = dotm::false_;
+                register_.f.h = dotm::false_;
+            }
+            else if (prf == 2u) //rl
+            {
+                operand = bit::rotate<bit::direction_e::left>(operand, 1u);
+                operand = bit::set(operand, 0u, register_.f.c);
+                register_.f.z = operand == 0u;
+                register_.f.c = bit::test(original_operand, 7u);
+                register_.f.n = dotm::false_;
+                register_.f.h = dotm::false_;
+            }
+            else if (prf == 3u) //rr
+            {
+                operand = bit::rotate<bit::direction_e::right>(operand, 1u);
+                operand = bit::set(operand, 7u, register_.f.c);
+                register_.f.z = operand == 0u;
+                register_.f.c = bit::test(original_operand, 0u);
+                register_.f.n = dotm::false_;
+                register_.f.h = dotm::false_;
+            }
+            else if (prf == 4u) //sla
+            {
+                operand = bit::shift<bit::shift_e::arithmetic, bit::direction_e::left>(operand, 1u);
+                register_.f.z = operand == 0u;
+                register_.f.c = bit::test(original_operand, 7u);
+                register_.f.n = dotm::false_;
+                register_.f.h = dotm::false_;
+            }
+            else if (prf == 5u) //sra
+            {
+                operand = bit::shift<bit::shift_e::arithmetic, bit::direction_e::right>(operand, 1u);
+                register_.f.z = operand == 0u;
+                register_.f.c = bit::test(original_operand, 0u);
+                register_.f.n = dotm::false_;
+                register_.f.h = dotm::false_;
+            }
+            else if (prf == 6u) //swap
+            {
+                operand = bit::rotate<bit::direction_e::left>(operand, 4u);
+                register_.f.z = operand == 0u;
+                register_.f.c = dotm::false_;
+                register_.f.n = dotm::false_;
+                register_.f.h = dotm::false_;
+            }
+            else if (prf == 7u) //srl
+            {
+                operand = bit::shift<bit::shift_e::logical, bit::direction_e::right>(operand, 1u);
+                register_.f.z = operand == 0u;
+                register_.f.c = bit::test(original_operand, 0u);
+                register_.f.n = dotm::false_;
+                register_.f.h = dotm::false_;
+            }
+            else if (prf2 == 1u) //bit
+            {
+                register_.f.z = !bit::test(operand, bit_index);
                 register_.f.n = dotm::false_;
                 register_.f.h = dotm::true_;
+                return; // Don't write back for BIT instruction
             }
-            else if (instruction & 0x80)
+            else if (prf2 == 2u) //res
             {
-                register_[index] = bit::set(register_[index], bit_index, dotm::false_);
+                operand = bit::set(operand, bit_index, dotm::false_);
             }
-            else if (instruction & 0xC0)
+            else if (prf2 == 3u) //set
             {
-                register_[index] = bit::set(register_[index], bit_index, dotm::true_);
+                operand = bit::set(operand, bit_index, dotm::true_);
             }
+    
+            if   (is_hl_indirect) memory_.write(register_.hl, operand);
+            else                  register_[index] = operand;
         }
         void ldh_dc_a  ()
         {
@@ -993,14 +981,15 @@ export namespace dotm
         }
         void adc_a_dhl ()
         {
-            auto const addend  = memory_.read(register_.hl);
-            auto const operand = register_.a;
+            auto const immediate  = memory_.read(register_.hl);
+            auto const carry_flag = register_.f.c;
+            auto const operand    = register_.a;
 
-            register_.a        = register_.a + addend;
-            register_.f.z      = register_.a == 0u;
-            register_.f.n      = dotm::false_;
-            register_.f.h      = bit::check_half_carry<std::plus>(operand, addend);
-            register_.f.c      = bit::check_carry     <std::plus>(operand, addend);
+            register_.a           = register_.a + immediate + carry_flag;
+            register_.f.z         = register_.a == 0u;
+            register_.f.n         = dotm::false_;
+            register_.f.h         = ((operand & 0x0F) + (immediate & 0x0F) + carry_flag) > 0x0F;
+            register_.f.c         = (static_cast<dotm::uint16_t>(operand) + static_cast<dotm::uint16_t>(immediate) + static_cast<dotm::uint16_t>(carry_flag)) > 0xFF;
         }
         void sub_a_dhl ()
         {
@@ -1015,14 +1004,15 @@ export namespace dotm
         }
         void sbc_a_dhl ()
         {
-            auto const subtrahend = memory_.read(register_.hl);
+            auto const immediate  = memory_.read(register_.hl);
+            auto const carry_flag = register_.f.c;
             auto const operand    = register_.a;
 
-            register_.a           = register_.a - subtrahend;
+            register_.a           = register_.a - immediate - carry_flag;
             register_.f.z         = register_.a == 0u;
             register_.f.n         = dotm::true_;
-            register_.f.h         = bit::check_half_carry<std::minus>(operand, subtrahend);
-            register_.f.c         = bit::check_carry     <std::minus>(operand, subtrahend);
+            register_.f.h         = ((operand & 0x0F) - (immediate & 0x0F) - carry_flag) < 0;
+            register_.f.c         = (static_cast<dotm::int16_t>(operand) - static_cast<dotm::int16_t>(immediate) - static_cast<dotm::int16_t>(carry_flag)) < 0;
         }
         void and_a_dhl ()
         {
