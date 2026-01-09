@@ -51,7 +51,43 @@ export namespace dotm::bit
     {
         return static_cast<value_t>(value ^ (1u << index));
     }
-
+    
+    template<std::unsigned_integral value_t>
+    auto constexpr pop_count        (value_t value) -> value_t
+    {
+        return std::popcount(value);
+    }
+    template<bit::direction_e direction_v, std::unsigned_integral value_t>
+    auto constexpr count_zero       (value_t value) -> value_t
+    {
+             if constexpr (direction_v == bit::direction_e::left ) return std::countl_zero(value);
+        else if constexpr (direction_v == bit::direction_e::right) return std::countr_zero(value);
+        else static_assert(dotm::false_, "invalid direction");
+    }
+    template<bit::direction_e direction_v, std::unsigned_integral value_t>
+    auto constexpr count_one        (value_t value) -> value_t
+    {
+             if constexpr (direction_v == bit::direction_e::left ) return std::countl_one(value);
+        else if constexpr (direction_v == bit::direction_e::right) return std::countr_one(value);
+        else static_assert(dotm::false_, "invalid direction");
+    }
+    template<std::unsigned_integral value_t>
+    auto constexpr is_power_of_2    (value_t value) -> dotm::bool_t
+    {
+        return std::has_single_bit(value);
+    }
+    
+    template<std::unsigned_integral value_t>
+    auto constexpr length           () -> value_t
+    {
+        return static_cast<value_t>(sizeof(value_t) * bit::byte_width);
+    }
+    template<std::unsigned_integral value_t>
+    auto constexpr width            (value_t value = {}) -> value_t
+    {
+        return static_cast<value_t>(bit::length<value_t>() - bit::count_zero<bit::direction_e::left>(value));
+    }
+    
     template<std::unsigned_integral value_t>
     auto constexpr swap             (value_t value) -> value_t
     {
@@ -78,40 +114,14 @@ export namespace dotm::bit
         else if constexpr (direction_v == bit::direction_e::right) return std::rotr(value, rotation);
         else static_assert(dotm::false_, "invalid direction");
     }
-    template<std::unsigned_integral value_t>
-    auto constexpr pop_count        (value_t value) -> value_t
-    {
-        return std::popcount(value);
-    }
     template<bit::direction_e direction_v, std::unsigned_integral value_t>
-    auto constexpr count_zero       (value_t value) -> value_t
+    auto constexpr rotate_carry     (value_t value, dotm::flag_t carry) -> std::tuple<value_t, dotm::flag_t>
     {
-             if constexpr (direction_v == bit::direction_e::left ) return std::countl_zero(value);
-        else if constexpr (direction_v == bit::direction_e::right) return std::countr_zero(value);
-        else static_assert(dotm::false_, "invalid direction");
-    }
-    template<bit::direction_e direction_v, std::unsigned_integral value_t>
-    auto constexpr count_one        (value_t value) -> value_t
-    {
-             if constexpr (direction_v == bit::direction_e::left ) return std::countl_one(value);
-        else if constexpr (direction_v == bit::direction_e::right) return std::countr_one(value);
-        else static_assert(dotm::false_, "invalid direction");
-    }
-    template<std::unsigned_integral value_t>
-    auto constexpr is_power_of_2    (value_t value) -> dotm::bool_t
-    {
-        return std::has_single_bit(value);
-    }
+        auto const index = static_cast<value_t>(bit::length<value_t>() - 1u);
 
-    template<std::unsigned_integral value_t>
-    auto constexpr length           () -> value_t
-    {
-        return static_cast<value_t>(sizeof(value_t) * bit::byte_width);
-    }
-    template<std::unsigned_integral value_t>
-    auto constexpr width            (value_t value = {}) -> value_t
-    {
-        return static_cast<value_t>(bit::length<value_t>() - bit::count_zero<bit::direction_e::left>(value));
+             if constexpr (direction_v == bit::direction_e::left ) return std::make_tuple(bit::set(bit::shift<bit::shift_e::logical, direction_v>(value, 1u), 0u   , carry), bit::test(value, index));
+        else if constexpr (direction_v == bit::direction_e::right) return std::make_tuple(bit::set(bit::shift<bit::shift_e::logical, direction_v>(value, 1u), index, carry), bit::test(value, 0u   ));
+        else static_assert(dotm::false_, "invalid direction");
     }
 
     template<std::unsigned_integral value_t, std::unsigned_integral index_t, std::unsigned_integral count_t>
@@ -180,19 +190,19 @@ export namespace dotm::bit
     }
     
     template<bit::operation_e operation_v, std::unsigned_integral value_t>
-    auto constexpr test_carry       (value_t alpha, value_t beta, dotm::bool_t carry_flag = dotm::false_) -> dotm::bool_t
+    auto constexpr test_carry       (value_t alpha, value_t beta, dotm::flag_t carry = dotm::false_) -> dotm::bool_t
     {
-             if constexpr (operation_v == bit::operation_e::add     ) return alpha + beta + carry_flag > std::numeric_limits<value_t>::max();
-        else if constexpr (operation_v == bit::operation_e::subtract) return alpha - beta - carry_flag < std::numeric_limits<value_t>::min();
+             if constexpr (operation_v == bit::operation_e::add     ) return alpha + beta + carry > std::numeric_limits<value_t>::max();
+        else if constexpr (operation_v == bit::operation_e::subtract) return alpha - beta - carry < std::numeric_limits<value_t>::min();
         else static_assert(dotm::false_, "invalid operation");
     }
     template<bit::operation_e operation_v, std::unsigned_integral value_t>
-    auto constexpr test_half_carry  (value_t alpha, value_t beta, dotm::bool_t carry_flag = dotm::false_) -> dotm::bool_t
+    auto constexpr test_half_carry  (value_t alpha, value_t beta, dotm::flag_t carry = dotm::false_) -> dotm::bool_t
     {
         auto constexpr mask = static_cast<value_t>(std::numeric_limits<value_t>::max() >> 4u);
 
-             if constexpr (operation_v == bit::operation_e::add     ) return ((alpha & mask) + (beta & mask) + carry_flag) & (mask + 1u);
-        else if constexpr (operation_v == bit::operation_e::subtract) return ((alpha & mask) - (beta & mask) - carry_flag) & (mask + 1u);
+             if constexpr (operation_v == bit::operation_e::add     ) return ((alpha & mask) + (beta & mask) + carry) & (mask + 1u);
+        else if constexpr (operation_v == bit::operation_e::subtract) return ((alpha & mask) - (beta & mask) - carry) & (mask + 1u);
         else static_assert(dotm::false_, "invalid operation");
     }
 }

@@ -6,6 +6,7 @@ export namespace dotm
 {
     using void_t          = void         ;
     using bool_t          = bool         ;
+    using flag_t          = bool         ;
     using char_t          = char         ;
     enum                  : dotm::bool_t
     {
