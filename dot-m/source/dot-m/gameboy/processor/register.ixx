@@ -1,64 +1,64 @@
-export module dotm.sm83_register;
+export module dotm.dmg.processor.register_;
 
 import std;
 import dotm.types;
-import dotm.processor;
+import dotm.dmg.processor.cpsr;
 import dotm.bitwise;
 
-export namespace dotm
+export namespace dtm::dmg
 {
     template<bit::endian_e endian_v>
-    struct sm83_register;
+    struct register_;
     template<>
-    struct sm83_register<bit::endian_e::little>
+    struct register_<bit::endian_e::little>
     {
-        sm83_register()
+        register_()
             : af{}, bc{}, de{}, hl{}, sp{}, pc{} {}
 
         union
         {
             struct
             {
-                dotm::cpsr<bit::endian_e::little> f;
-                dotm::uint8_t                     a;
+                dmg::cpsr<bit::endian_e::little> f;
+                dtm::uint8_t                     a;
             };
-            dotm::uint16_t af;
+            dtm::uint16_t af;
         };
         union
         {
             struct
             {
-                dotm::uint8_t c;
-                dotm::uint8_t b;
+                dtm::uint8_t c;
+                dtm::uint8_t b;
             };
-            dotm::uint16_t bc;
+            dtm::uint16_t bc;
         };
         union
         {
             struct
             {
-                dotm::uint8_t e;
-                dotm::uint8_t d;
+                dtm::uint8_t e;
+                dtm::uint8_t d;
             };
-            dotm::uint16_t de;
+            dtm::uint16_t de;
         };
         union
         {
             struct
             {
-                dotm::uint8_t l;
-                dotm::uint8_t h;
+                dtm::uint8_t l;
+                dtm::uint8_t h;
             };
-            dotm::uint16_t hl;
+            dtm::uint16_t hl;
         };
 
-        dotm::uint16_t sp;
-        dotm::uint16_t pc;
+        dtm::uint16_t sp;
+        dtm::uint16_t pc;
 
         template<std::unsigned_integral index_t>
         auto operator[](index_t index) -> index_t&
         {
-                 if constexpr (std::is_same_v<index_t, dotm::uint8_t >)
+                 if constexpr (std::is_same_v<index_t, dtm::uint8_t >)
             {
                 switch (index)
                 {
@@ -73,7 +73,7 @@ export namespace dotm
                     default: std::unreachable();
                 }
             }
-            else if constexpr (std::is_same_v<index_t, dotm::uint16_t>)
+            else if constexpr (std::is_same_v<index_t, dtm::uint16_t>)
             {
                 switch (index)
                 {
@@ -85,59 +85,59 @@ export namespace dotm
                     default: std::unreachable();
                 }
             }
-            else static_assert(dotm::false_, "invalid index type");
+            else static_assert(dtm::false_, "invalid index type");
         }
     };
     template<>
-    struct sm83_register<bit::endian_e::big   >
+    struct register_<bit::endian_e::big   >
     {
-        sm83_register()
+        register_()
             : af{}, bc{}, de{}, hl{}, sp{}, pc{} {}
 
         union
         {
             struct
             {
-                dotm::uint8_t                  a;
-                dotm::cpsr<bit::endian_e::big> f;
+                dtm::uint8_t                  a;
+                dmg::cpsr<bit::endian_e::big> f;
             };
-            dotm::uint16_t af;
+            dtm::uint16_t af;
         };
         union
         {
             struct
             {
-                dotm::uint8_t b;
-                dotm::uint8_t c;
+                dtm::uint8_t b;
+                dtm::uint8_t c;
             };
-            dotm::uint16_t bc;
+            dtm::uint16_t bc;
         };
         union
         {
             struct
             {
-                dotm::uint8_t d;
-                dotm::uint8_t e;
+                dtm::uint8_t d;
+                dtm::uint8_t e;
             };
-            dotm::uint16_t de;
+            dtm::uint16_t de;
         };
         union
         {
             struct
             {
-                dotm::uint8_t h;
-                dotm::uint8_t l;
+                dtm::uint8_t h;
+                dtm::uint8_t l;
             };
-            dotm::uint16_t hl;
+            dtm::uint16_t hl;
         };
 
-        dotm::uint16_t sp;
-        dotm::uint16_t pc;
+        dtm::uint16_t sp;
+        dtm::uint16_t pc;
 
         template<std::unsigned_integral index_t>
         auto operator[](index_t index) -> index_t&
         {
-                 if constexpr (std::is_same_v<index_t, dotm::uint8_t >)
+                 if constexpr (std::is_same_v<index_t, dtm::uint8_t >)
             {
                 switch (index)
                 {
@@ -152,7 +152,7 @@ export namespace dotm
                     default: std::unreachable();
                 }
             }
-            else if constexpr (std::is_same_v<index_t, dotm::uint16_t>)
+            else if constexpr (std::is_same_v<index_t, dtm::uint16_t>)
             {
                 switch (index)
                 {
@@ -168,7 +168,7 @@ export namespace dotm
                     default: std::unreachable();
                 }
             }
-            else static_assert(dotm::false_, "invalid index type");
+            else static_assert(dtm::false_, "invalid index type");
         }
     };
 }

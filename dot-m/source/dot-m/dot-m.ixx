@@ -1,10 +1,10 @@
 export module dotm;
 export import dotm.types;
-export import dotm.architecture.sm83;
-export import dotm.processor;
-export import dotm.sm83_register;
+export import dotm.dmg.processor;
+export import dotm.dmg.processor.cpsr;
+export import dotm.dmg.processor.register_;
 
-export namespace dotm
+export namespace dtm
 {
 
 }

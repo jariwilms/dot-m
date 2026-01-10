@@ -3,22 +3,22 @@ export module dotm.sm83_memory;
 import std;
 import dotm.types;
 
-export namespace dotm
+export namespace dtm::dmg
 {
-    struct sm83_memory
+    struct memory
     {
     public:
-        auto read (dotm::uint16_t address                   ) -> dotm::byte_t
+        auto read (dtm::uint16_t address                   ) -> dtm::byte_t
         {
             if (address == 0xFF44) return 0x90;
             else return memory_[address];
         }
-        void write(dotm::uint16_t address, dotm::byte_t value)
+        void write(dtm::uint16_t address, dtm::byte_t value)
         {
             memory_[address] = value;
         }
 
     //private:
-        std::array<dotm::byte_t, 0x10000> memory_;
+        std::array<dtm::byte_t, 0x10000> memory_;
     };
 }

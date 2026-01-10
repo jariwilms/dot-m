@@ -2,13 +2,13 @@ export module dotm.types;
 
 import std;
 
-export namespace dotm
+export namespace dtm
 {
     using void_t          = void         ;
     using bool_t          = bool         ;
     using flag_t          = bool         ;
     using char_t          = char         ;
-    enum                  : dotm::bool_t
+    enum                  : dtm::bool_t
     {
         false_ = false, 
         true_  = true , 
@@ -31,7 +31,18 @@ export namespace dotm
     using size_t          = std::size_t  ;
     using index_t         = std::size_t  ;
 
-    using instruction8_t  = dotm::uint8_t ;
-    using instruction16_t = dotm::uint16_t;
-    using instruction32_t = dotm::uint32_t;
+    using instruction8_t  = std::uint8_t ;
+    using instruction16_t = std::uint16_t;
+    using instruction32_t = std::uint32_t;
+
+    using address8_t      = std::uint8_t ;
+    using address16_t     = std::uint16_t;
+    using address32_t     = std::uint32_t;
+    using address64_t     = std::uint64_t;
+
+    struct memory_range
+    {
+        dtm::uint16_t x;
+        dtm::uint16_t y;
+    };
 }
