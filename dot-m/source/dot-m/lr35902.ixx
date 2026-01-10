@@ -959,24 +959,6 @@ export namespace dotm
             else static_assert(dotm::false_, "invalid type");
         }
 
-        template<typename value_t>
-        auto read_next(dotm::uint16_t& address) -> value_t
-        {
-                 if constexpr (std::is_same_v<value_t, dotm::uint8_t >)
-            {
-                return memory_.read(address++);
-            }
-            else if constexpr (std::is_same_v<value_t, dotm::uint16_t>)
-            {
-                auto const alpha = memory_.read(address++);
-                auto const beta  = memory_.read(address++);
-                
-                return bit::pack<bit::endian_e::little, dotm::uint16_t>(alpha, beta);
-            }
-            else static_assert(dotm::false_, "invalid type");
-        }
-
-
 
 
         memory_t             memory_;
